@@ -1,9 +1,7 @@
-import { words } from "./words";
+// import { words } from "./words";
 
-let original_words = [...words];
-
-function lg(){
-    console.log(...arguments)
+function lg() {
+    console.log(...arguments);
 }
 
 const keyboard = {
@@ -39,169 +37,97 @@ const keyboard = {
     enter: document.getElementsByClassName("quordle-key").item(27),
 };
 
-let alphabets = new Set()
-Object.keys(keyboard).filter(el=>el!=='backspace'&&el!=='enter').forEach(char=>alphabets.add(char))
+let alphabets = new Set();
+Object.keys(keyboard)
+    .filter((el) => el !== "backspace" && el !== "enter")
+    .forEach((char) => alphabets.add(char));
 
 class Solution {
-    constructor(name=undefined) {
-        this.words = words;
+    constructor(name = undefined) {
+        this.words = [...words];
         this.length = 5;
-        // this.known_letters = [-1, -1, -1, -1, -1];
-        // this.blacklisted_letters = [];
-        // this.misplaced_letters = [[], [], [], [], []];
-        this.name = name
-        if(name){
-            this.getDomBoard()
+        this.name = name;
+        this.misplaced_letters = [];
+        if (name) {
+            this.getDomBoard();
         }
-        this.init()
+        this.init();
     }
 
-    init(){
-        this.word_information = []
-        for(let i = 0; i < this.length; i++){
+    init() {
+        this.word_information = [];
+        for (let i = 0; i < this.length; i++) {
             this.word_information.push({
-                possible_alphabets: alphabets
-            })
+                possible_alphabets: new Set(alphabets),
+            });
         }
     }
 
-    addBlacklistLetter(char) {
-        if(!this.blacklisted_letters.includes(char) && !this.known_letters.includes(char) && !this.checkMisplacedLetter(char)){
-            this.blacklisted_letters.push(char)
-        }
-        this.removeBlacklistedWords()
-        return true
+    getDomBoard() {
+        this.board = document.querySelectorAll(
+            `[aria-label="${this.name}"]`
+        )[0];
+        this.rows = this.board.children;
     }
 
-    addBlacklistLetters() {
-        [...arguments].forEach(char=>{
-            this.addBlacklistLetter(char)
-        })
-        return true
-    }
-
-    removeBlacklistedWords() {
-        this.blacklisted_letters.forEach((letter) => {
-            this.words = this.words.filter(word=>{
-                return !word.split('').includes(letter)
-            })
+    syncWithDOM() {
+        Array.prototype.slice.call(this.rows).forEach((row) => {
+            let cells = row.children;
+            Array.prototype.slice.call(cells).forEach((cell, index) => {
+                if (cell.classList.contains("bg-gray-200")) {
+                    let char = cell.children[0].textContent.toLowerCase();
+                    if(this.misplaced_letters.includes(char)){
+                        this.word_information[index].possible_alphabets.delete(
+                            char
+                        );
+                    }else{
+                        this.word_information.forEach((char_information) => {
+                            char_information.possible_alphabets.delete(char);
+                        });
+                    }
+                } else if (cell.classList.contains("bg-box-diff")) {
+                    let char = cell.children[0].textContent.toLowerCase();
+                    this.misplaced_letters.push(char)
+                    this.word_information[index].possible_alphabets.delete(
+                        char
+                    );
+                } else if (cell.classList.contains("bg-box-correct")) {
+                    let char = cell.children[0].textContent.toLowerCase();
+                    let temp_object = this.word_information[index];
+                    this.word_information[index] = {
+                        status: "known",
+                        char: char,
+                        possible_alphabets: temp_object.possible_alphabets,
+                    };
+                }
+            });
         });
     }
 
-    checkMisplacedLetter(char){
-        let exists = false
-        this.misplaced_letters.forEach(arr=>{
-            arr.forEach(letter=>{
-                if(letter===char){
-                    exists = true
-                }
-            })
-        })
-        return exists
-    }
-
-    addKnownLetter(char, position){
-        this.known_letters[position] = char.toLowerCase()
-        this.removeWordsBasedOnKnownLetters()
-        return true
-    }
-
-    removeWordsBasedOnKnownLetters(){
-        this.words = this.words.filter(word=>{
-            let letters = word.split('');
-            let validity = true
-            
-            this.known_letters.forEach((known_letter, index)=>{
-                if (known_letter === -1){
-                    return
-                }
-
-                if (known_letter !== letters[index]){
-                    validity = false
-                }
-            })
-
-            return validity
-        })
-    }
-
-    addMisplacedLetter(char, position){
-        if(!this.misplaced_letters[position].includes(char.toLowerCase())){
-            this.misplaced_letters[position].push(char.toLowerCase())
-        }
-        this.removeWordsBasedOnMisplacedLetters()
-        return true
-    }
-
-    removeWordsBasedOnMisplacedLetters(){
-        this.words = this.words.filter(word=>{
-            let letters = word.split('');
-            let validity = true
-
-            for (let i = 0; i < this.misplaced_letters.length; i++){
-                this.misplaced_letters[i].forEach((char)=>{
-                    if(letters[i]===char){
-                        validity = false
-                        return
+    filterPossibleWords() {
+        this.words = this.words.filter((word) => {
+            let letters = word.split("");
+            let validity = true;
+            let information = this.word_information;
+            for (let i = 0; i < this.length; i++) {
+                if (information[i].status === "known") {
+                    if (information[i].char !== letters[i]) {
+                        validity = false;
+                        break;
                     }
-    
-                    if(!letters.includes(char)){
-                        validity = false
-                        return
+                } else {
+                    if (!information[i].possible_alphabets.has(letters[i])) {
+                        validity = false;
+                        break;
                     }
-                })
+                }
             }
-            
-            return validity
-        })
-    }
-
-    getDomBoard(){
-        this.board = document.querySelectorAll(`[aria-label="${this.name}"]`)[0]
-        this.rows = this.board.children
-    }
-
-    syncWithDOM(){
-        let blacklisted = []
-        let misplaced = []
-        let known = []
-        Array.prototype.slice.call(this.rows).forEach(row=>{
-            let cells = row.children
-            Array.prototype.slice.call(cells).forEach((cell,index)=>{
-                if(cell.classList.contains("bg-gray-200")){
-                    blacklisted.push(cell.children[0].textContent.toLowerCase())
-                }else if(cell.classList.contains("bg-box-diff")){
-                    misplaced.push({char: cell.children[0].textContent.toLowerCase(), index: index})
-                }else if(cell.classList.contains("bg-box-correct")){
-                    known.push({char: cell.children[0].textContent.toLowerCase(), index: index})
-                }
-            })
-        })
-
-        known.forEach(letter=>{
-            this.addKnownLetter(
-                letter.char,
-                letter.index
-            )
-        })
-
-        misplaced.forEach(letter=>{
-            this.addMisplacedLetter(
-                letter.char,
-                letter.index
-            )
-        })
-
-        blacklisted.forEach(letter=>{
-            this.addBlacklistLetter(letter)
-        })
+            return validity;
+        });
     }
 }
 
-
-
 function typeWord(word) {
-    // word = word.split('');
     for (let i = 0; i < word.length; i++) {
         const element = word[i];
         keyboard[element].click();
@@ -209,40 +135,65 @@ function typeWord(word) {
     keyboard.enter.click();
 }
 
+function endGame(){
+    typeWord('heave')
+    typeWord('heave')
+    typeWord('heave')
+    typeWord('heave')
+    typeWord('heave')
+    typeWord('heave')
+    typeWord('heave')
+    typeWord('heave')
+    typeWord('heave')
+}
+
 function getRandomWordFromList(list) {
-    return list[Math.floor(0 + Math.random()*(list.length))]
+    return list[Math.floor(0 + Math.random() * list.length)];
 }
 
-let b1 = new Solution("Game Board 1")
-let b2 = new Solution("Game Board 2")
-let b3 = new Solution("Game Board 3")
-let b4 = new Solution("Game Board 4")
+let b1 = new Solution("Game Board 1");
+let b2 = new Solution("Game Board 2");
+let b3 = new Solution("Game Board 3");
+let b4 = new Solution("Game Board 4");
 
-let boards = [b1, b2, b3, b4]
+let boards = [b1, b2, b3, b4];
 
-typeWord('serai')
-typeWord('until')
+typeWord("salet");
+typeWord("adieu");
 
-boards.forEach(board=>board.syncWithDOM())
+boards.forEach((board) => {
+    board.syncWithDOM();
+    board.filterPossibleWords();
+});
 
-
-for(let i = 0;i < 15; i++){
-    let mostInfoBoard = boards[0]
-    boards.forEach(board=>{
-        if(board.words.length < mostInfoBoard.words.length){
-            mostInfoBoard = board
+for (let i = 0; i < 15; i++) {
+    let mostInfoBoard = boards[0];
+    boards.forEach((board) => {
+        if (board.words.length < mostInfoBoard.words.length) {
+            mostInfoBoard = board;
         }
-    })
-    lg(mostInfoBoard, 'asdasd')
-    let word = getRandomWordFromList(mostInfoBoard.words)
-    lg(word)
-    typeWord(word)
-    boards.forEach(board=>board.syncWithDOM())
-    boards = boards.filter(board=>{
-        if(board.known_letters.indexOf(-1)===-1){
-            return false
+    });
+    lg(mostInfoBoard, "asdasd");
+    let word = getRandomWordFromList(mostInfoBoard.words);
+    lg(word);
+    typeWord(word);
+
+    boards.forEach((board) => {
+        board.syncWithDOM();
+        board.filterPossibleWords();
+    });
+    lg(boards)
+    boards = boards.filter((board) => {
+        let number_of_known_characters = 0;
+        board.word_information.forEach((char_information) => {
+            if (char_information.status === "known") {
+                number_of_known_characters++;
+            }
+        });
+
+        if (number_of_known_characters === 5) {
+            return false;
         }
-        return true
-    })
+        return true;
+    });
 }
-
